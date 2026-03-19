@@ -4,7 +4,7 @@ import random
 from datetime import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-import google.genai as genai
+from groq import Groq
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "8557711850:AAHErioOhpd6RrAPB2LQ1VhD4WpMROlKYlM"
 ADMIN_IDS = [5508757120]
 GROUP_ID = -1002472743528
-GEMINI_API_KEY = "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"
+GROQ_API_KEY = "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"
 
 USED_TOPICS = []
 
@@ -52,21 +52,26 @@ def generate_discussion_sync():
     topic = random.choice(available)
     USED_TOPICS.append(topic)
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    prompt = (
-        "אתה מנחה קהילת BDSM בישראל. "
-        "צור דיון יומי מעניין בעברית על הנושא: " + topic + "\n\n"
-        "הפורמט:\n"
-        "🔥 נושא הדיון: " + topic + "\n\n"
-        "[2-3 משפטים על הנושא]\n\n"
-        "💬 שאלה לקהילה: [שאלה פתוחה מעניינת]\n\n"
-        "שפה מכבדת ופתוחה. ללא מוסר."
+    client = Groq(api_key=GROQ_API_KEY)
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "אתה מנחה קהילת BDSM בישראל. "
+                    "צור דיון יומי מעניין בעברית על הנושא: " + topic + "\n\n"
+                    "הפורמט:\n"
+                    "🔥 נושא הדיון: " + topic + "\n\n"
+                    "[2-3 משפטים על הנושא]\n\n"
+                    "💬 שאלה לקהילה: [שאלה פתוחה מעניינת]\n\n"
+                    "שפה מכבדת ופתוחה. ללא מוסר."
+                )
+            }
+        ],
+        max_tokens=400
     )
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
-    )
-    return response.text
+    return response.choices[0].message.content
 
 async def send_daily_discussion(context: ContextTypes.DEFAULT_TYPE):
     try:
