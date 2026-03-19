@@ -1,17 +1,18 @@
 import logging
 import asyncio
 import random
-import google.generativeai as genai
 from datetime import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+import google.genai as genai
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from discussion_config import BOT_TOKEN, ADMIN_IDS, GROUP_ID, GEMINI_API_KEY
-
-genai.configure(api_key=GEMINI_API_KEY)
+BOT_TOKEN = "8557711850:AAHErioOhpd6RrAPB2LQ1VhD4WpMROlKYlM"
+ADMIN_IDS = [5508757120]
+GROUP_ID = -1002472743528
+GEMINI_API_KEY = "AIzaSyDBtqs3q9XDfo-D9ZoakDCnbouurCkJGvk"
 
 USED_TOPICS = []
 
@@ -37,52 +38,52 @@ TOPICS_POOL = [
     "איך מוצאים שותף BDSM?",
     "Scene Planning - איך מתכננים סצנה?",
     "Power Exchange - מה זה אומר לכם?",
-    "Humiliation vs Degradation",
     "Sadomasochism - כאב כעונג",
     "BDSM ויחסים רומנטיים",
     "Fetish - מה ההבדל בין פטיש לקינק?",
 ]
 
-def generate_discussion_sync(topic=None):
+def generate_discussion_sync():
     global USED_TOPICS
-    if not topic:
-        available = [t for t in TOPICS_POOL if t not in USED_TOPICS]
-        if not available:
-            USED_TOPICS = []
-            available = TOPICS_POOL
-        topic = random.choice(available)
-        USED_TOPICS.append(topic)
+    available = [t for t in TOPICS_POOL if t not in USED_TOPICS]
+    if not available:
+        USED_TOPICS = []
+        available = TOPICS_POOL
+    topic = random.choice(available)
+    USED_TOPICS.append(topic)
 
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    client = genai.Client(api_key=GEMINI_API_KEY)
     prompt = (
         "אתה מנחה קהילת BDSM בישראל. "
         "צור דיון יומי מעניין בעברית על הנושא: " + topic + "\n\n"
-        "הפורמט חייב להיות בדיוק:\n"
-        "🔥 נושא הדיון: [נושא]\n\n"
-        "[2-3 משפטים על הנושא בעברית]\n\n"
+        "הפורמט:\n"
+        "🔥 נושא הדיון: " + topic + "\n\n"
+        "[2-3 משפטים על הנושא]\n\n"
         "💬 שאלה לקהילה: [שאלה פתוחה מעניינת]\n\n"
-        "השתמש בשפה מכבדת ופתוחה. אל תוסיף מוסר."
+        "שפה מכבדת ופתוחה. ללא מוסר."
     )
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
     return response.text
 
 async def send_daily_discussion(context: ContextTypes.DEFAULT_TYPE):
     try:
-        logger.info("Generating daily discussion with Gemini...")
         loop = asyncio.get_event_loop()
         discussion = await loop.run_in_executor(None, generate_discussion_sync)
         await context.bot.send_message(GROUP_ID, discussion)
         logger.info("Daily discussion sent!")
         for admin_id in ADMIN_IDS:
             try:
-                await context.bot.send_message(admin_id, "✅ הדיון היומי נשלח לקבוצה!")
+                await context.bot.send_message(admin_id, "✅ הדיון היומי נשלח!")
             except:
                 pass
     except Exception as e:
         logger.error("Error: " + str(e))
         for admin_id in ADMIN_IDS:
             try:
-                await context.bot.send_message(admin_id, "❌ שגיאה בשליחת הדיון: " + str(e))
+                await context.bot.send_message(admin_id, "❌ שגיאה: " + str(e))
             except:
                 pass
 
@@ -93,10 +94,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     keyboard = [
         [InlineKeyboardButton("🔥 שלח דיון עכשיו", callback_data="send_now")],
-        [InlineKeyboardButton("📋 נושאים אפשריים", callback_data="show_topics")],
+        [InlineKeyboardButton("📋 נושאים", callback_data="show_topics")],
     ]
     await update.message.reply_text(
-        "🛠 פאנל אדמין - בוט דיונים יומיים\n\nדיון נשלח כל יום בשעה 20:00 אוטומטית 🤖",
+        "🛠 פאנל אדמין - בוט דיונים יומיים\n\nדיון נשלח כל יום בשעה 20:00 אוטומטית",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -113,7 +114,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             discussion = await loop.run_in_executor(None, generate_discussion_sync)
             await context.bot.send_message(GROUP_ID, discussion)
             await query.edit_message_text(
-                "✅ הדיון נשלח לקבוצה!\n\n" + discussion[:200] + "...",
+                "✅ הדיון נשלח לקבוצה!",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזור", callback_data="back")]])
             )
         except Exception as e:
@@ -122,33 +123,30 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "show_topics":
         topics_text = "\n".join(["• " + t for t in TOPICS_POOL[:12]])
         await query.edit_message_text(
-            "📋 חלק מהנושאים:\n\n" + topics_text + "\n\n...ועוד שה-AI ייצר!",
+            "📋 נושאים:\n\n" + topics_text,
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזור", callback_data="back")]])
         )
 
     elif query.data == "back":
         keyboard = [
             [InlineKeyboardButton("🔥 שלח דיון עכשיו", callback_data="send_now")],
-            [InlineKeyboardButton("📋 נושאים אפשריים", callback_data="show_topics")],
+            [InlineKeyboardButton("📋 נושאים", callback_data="show_topics")],
         ]
         await query.edit_message_text(
-            "🛠 פאנל אדמין - בוט דיונים יומיים",
+            "🛠 פאנל אדמין - בוט דיונים",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-
     app.job_queue.run_daily(
         send_daily_discussion,
         time=time(hour=20, minute=0),
         name="daily_discussion"
     )
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback_handler))
-
-    logger.info("בוט דיונים פועל! שולח כל יום בשעה 20:00")
+    logger.info("בוט דיונים פועל!")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
